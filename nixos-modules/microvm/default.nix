@@ -23,6 +23,7 @@ in
     ./optimization.nix
     ./ssh-deploy.nix
     ./vsock-ssh.nix
+    ./xen.nix
   ];
 
   config = {

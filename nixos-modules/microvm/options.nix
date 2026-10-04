@@ -590,8 +590,8 @@ in
       type = types.bool;
       default = ! lib.any ({ source, ... }:
         source == "/nix/store"
-      ) config.microvm.shares;
-      description = "Whether to boot with the storeDisk, that is, unless the host's /nix/store is a microvm.share.";
+      ) (self-lib.supportedShares config.microvm);
+      description = "Whether to boot with the storeDisk, that is, unless the host's /nix/store is a microvm.share (Xen always uses the storeDisk).";
     };
 
     registerClosure = lib.mkEnableOption ''
@@ -973,6 +973,29 @@ in
           Useful for configurations that should work on both ARM and Intel Macs.
         '';
       };
+    };
+
+    xen.package = mkOption {
+      description = ''
+        The Xen package providing `xl` and the hotplug scripts.
+
+        Must match the toolstack running in dom0
+        (`virtualisation.xen.package` on the host).
+      '';
+      type = types.package;
+      default = cfg.vmHostPackages.xen;
+      defaultText = lib.literalExpression "config.microvm.vmHostPackages.xen";
+    };
+
+    xen.extraConfig = mkOption {
+      type = types.lines;
+      default = "";
+      description = ''
+        Extra lines appended to the generated `xl.cfg(5)` domain configuration.
+      '';
+      example = ''
+        cpus = "2-5"
+      '';
     };
 
     prettyProcnames = mkOption {

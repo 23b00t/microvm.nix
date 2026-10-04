@@ -10,7 +10,7 @@ let
     # Is the /nix/store mounted from the host?
     builtins.any ({ source, ... }:
       source == "/nix/store"
-    ) config.microvm.shares;
+    ) ((import ../../lib { inherit lib; }).supportedShares config.microvm);
 
 in
 lib.mkIf (cfg.guest.enable && cfg.optimize.enable) {
@@ -27,6 +27,7 @@ lib.mkIf (cfg.guest.enable && cfg.optimize.enable) {
           "cloud-hypervisor"
           "firecracker"
           "stratovirt"
+          "xen"
         ]);
       tpm2.enable = lib.mkDefault false;
     };

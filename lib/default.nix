@@ -9,6 +9,7 @@ rec {
     "stratovirt"
     "alioth"
     "vfkit"
+    "xen"
   ];
 
   hypervisorsWithNetwork = hypervisors;
@@ -23,6 +24,20 @@ rec {
   ];
 
   defaultFsType = "ext4";
+
+  # Shares that the hypervisor can actually provide to the guest.
+  # Xen has no virtiofs/9p transport yet: its shares are dropped (with a
+  # warning) and /nix/store comes from the storeDisk instead.
+  supportedShares = { hypervisor, shares, ... }:
+    if hypervisor == "xen"
+    then [ ]
+    else shares;
+
+  # Prefix of the guest block devices for volumes and the storeDisk
+  diskDevicePrefix = hypervisor:
+    if hypervisor == "xen"
+    then "/dev/xvd"
+    else "/dev/vd";
 
   withDriveLetters = { volumes, storeOnDisk, ... }:
     let

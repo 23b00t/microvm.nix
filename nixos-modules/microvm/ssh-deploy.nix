@@ -29,7 +29,7 @@ let
     # Is the /nix/store mounted from the host?
     builtins.any ({ source, ... }:
       source == "/nix/store"
-    ) config.microvm.shares;
+    ) ((import ../../lib { inherit lib; }).supportedShares config.microvm);
 
 in
 {

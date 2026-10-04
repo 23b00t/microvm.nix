@@ -8,7 +8,7 @@ let
 
   inherit (microvmConfig) hostName vmHostPackages;
 
-  inherit (import ./. { inherit lib; }) makeMacvtap withDriveLetters extractOptValues extractParamValue;
+  inherit (import ./. { inherit lib; }) makeMacvtap withDriveLetters extractOptValues extractParamValue supportedShares;
   inherit (import ./volumes.nix { pkgs = microvmConfig.vmHostPackages; }) createVolumesScript;
   inherit (makeMacvtap {
     inherit microvmConfig hypervisorConfig;
@@ -236,7 +236,8 @@ vmHostPackages.buildPackages.runCommandLocal "microvm-${microvmConfig.hypervisor
     echo multi_queue >> $out/share/microvm/tap-flags
   ''}
   ${lib.concatMapStringsSep " " (interface:
-    lib.optionalString (interface.type == "tap" && interface ? id) ''
+    # Xen creates vif devices itself, there are no tap devices to set up
+    lib.optionalString (interface.type == "tap" && interface ? id && microvmConfig.hypervisor != "xen") ''
       echo "${interface.id}" >> $out/share/microvm/tap-interfaces
     '') microvmConfig.interfaces}
 
@@ -263,7 +264,7 @@ vmHostPackages.buildPackages.runCommandLocal "microvm-${microvmConfig.hypervisor
         echo "${socket}" > $out/share/microvm/virtiofs/${tag}/socket
         echo "${source}" > $out/share/microvm/virtiofs/${tag}/source
       ''
-    ) microvmConfig.shares}
+    ) (supportedShares microvmConfig)}
 
   ${lib.concatMapStrings ({ bus, path, ... }: ''
     echo "${path}" >> $out/share/microvm/${bus}-devices

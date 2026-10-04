@@ -5,12 +5,15 @@ let
 
   inherit (import ../../lib {
     inherit lib;
-  }) defaultFsType withDriveLetters;
+  }) defaultFsType withDriveLetters supportedShares diskDevicePrefix;
+
+  shares = supportedShares config.microvm;
+  devPrefix = diskDevicePrefix config.microvm.hypervisor;
 
   hostStore = builtins.head (
     builtins.filter ({ source, ... }:
       source == "/nix/store"
-    ) config.microvm.shares
+    ) shares
   );
 
   roStore =
@@ -24,14 +27,14 @@ let
       if storeDiskType == "erofs"
       # erofs supports filesystem labels
       then "/dev/disk/by-label/nix-store"
-      else "/dev/vda"
+      else "${devPrefix}a"
     else throw "No disk letter when /nix/store is not in disk";
 
   # Check if the writable store overlay is a virtiofs share
   isRwStoreVirtiofsShare = builtins.any ({mountPoint, proto, ... }:
     mountPoint == config.microvm.writableStoreOverlay
     && proto == "virtiofs"
-  ) config.microvm.shares;
+  ) shares;
 
 in
 lib.mkIf config.microvm.guest.enable {
@@ -110,7 +113,7 @@ lib.mkIf config.microvm.guest.enable {
           device = if label != null then
             "/dev/disk/by-label/${label}"
           else
-            "/dev/vd${letter}";
+            "${devPrefix}${letter}";
         } // lib.optionalAttrs (mountPoint == config.microvm.writableStoreOverlay) {
           neededForBoot = true;
         };
@@ -131,7 +134,7 @@ lib.mkIf config.microvm.guest.enable {
       } // lib.optionalAttrs (source == "/nix/store" || mountPoint == config.microvm.writableStoreOverlay) {
         neededForBoot = true;
       };
-    }) {} config.microvm.shares
+    }) {} shares
   ) ];
 
   # Fix unmounting in qemu on shutdown for /nix/store

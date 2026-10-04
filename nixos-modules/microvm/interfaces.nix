@@ -5,7 +5,8 @@ let
     builtins.filter ({ type, ... }: type == wantedType)
       config.microvm.interfaces;
 
-  tapInterfaces = interfacesByType "tap";
+  # Xen creates vif devices itself (see lib/runners/xen.nix)
+  tapInterfaces = lib.optionals (config.microvm.hypervisor != "xen") (interfacesByType "tap");
   macvtapInterfaces = interfacesByType "macvtap";
 
   tapFlags = lib.concatStringsSep " " (

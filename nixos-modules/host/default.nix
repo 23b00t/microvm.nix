@@ -11,6 +11,11 @@ let
   };
   user = "microvm";
   group = "kvm";
+  xenServices = [
+    "xenstored.service"
+    "xenconsoled.service"
+    "xen-init-dom0.service"
+  ];
 in
 {
   imports = [ ./options.nix ];
@@ -153,6 +158,9 @@ in
       "microvm@${name}" = {
         # restartIfChanged is opt-out, so we have to include the definition unconditionally
         serviceConfig.X-RestartIfChanged = [ "" microvmConfig.restartIfChanged ];
+        # xl needs root for xenstore and the privcmd device
+        serviceConfig.User = lib.mkIf (runner.hypervisor == "xen") "root";
+        serviceConfig.Group = lib.mkIf (runner.hypervisor == "xen") "root";
         path = lib.mkForce [];
         # If the given declarative microvm wants to be restarted on change,
         # We have to make sure this service group is restarted. To make sure
@@ -170,7 +178,10 @@ in
         ];
         after = lib.optionals runner.registerWithMachined [
           "systemd-machined.service"
-        ];
+        ] ++ lib.optionals (runner.hypervisor == "xen") xenServices;
+        # Start after and stop before the Xen toolstack daemons, so that
+        # guests are shut down cleanly on host shutdown
+        requires = lib.optionals (runner.hypervisor == "xen") xenServices;
       };
       "microvm-tap-interfaces@${name}" = {
         serviceConfig.X-RestartIfChanged = [ "" microvmConfig.restartIfChanged ];
