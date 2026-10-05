@@ -80,8 +80,21 @@ let
   # HVM: only the PV nic, no emulated one next to it
   vifType = lib.optionalString isHvm "type=vif, ";
 
+  inherit (microvmConfig.xen) interfaceBackends driverDomain;
+
+  # Interfaces served by a driver domain: the hotplug script runs there, so
+  # only bridges (living in the driver domain) are possible, no dom0 tap script.
+  backendOf = id: interfaceBackends.${id} or null;
+
   vifs = map ({ type, id, mac, bridge, ... }:
-    if type == "tap"
+    if backendOf id != null
+    then
+      if type != "bridge" || bridge == null
+      then throw "xen: interface ${id} with a backend domain must be of type bridge with a bridge in that domain"
+      # No vifname: the upstream hotplug scripts derive the frontend domid from
+      # the default name vif<domid>.<devid> (set_mtu) and fail on a renamed vif
+      else "${vifType}mac=${mac}, bridge=${bridge}, backend=${backendOf id}"
+    else if type == "tap"
     then "${vifType}mac=${mac}, vifname=${id}, script=${vifScript}"
     else if type == "bridge"
     then
@@ -148,6 +161,7 @@ let
     vif = ${xlList vifs}
     ${hvmConfig}
     ${pciConfig}
+    ${lib.optionalString driverDomain "driver_domain = 1"}
     ${microvmConfig.xen.extraConfig}
   '';
 
@@ -175,6 +189,8 @@ else if initialBalloonMem >= mem
 then throw "xen: microvm.initialBalloonMem must be smaller than microvm.mem"
 else if hotpluggedMem > hotplugMem
 then throw "xen: microvm.hotpluggedMem must not exceed microvm.hotplugMem"
+else if builtins.any (id: !builtins.elem id (map ({ id, ... }: id) interfaces)) (builtins.attrNames interfaceBackends)
+then throw "xen: microvm.xen.interfaceBackends names an interface id that does not exist"
 else if usbDevices != [ ]
 then throw "xen: USB passthrough is not supported; pass the USB controller (bus = \"pci\") to a driver domain instead"
 else if pciDevices != [ ] && !isHvm

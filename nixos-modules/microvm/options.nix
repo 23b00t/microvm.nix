@@ -1011,6 +1011,28 @@ in
       defaultText = lib.literalExpression "config.microvm.vmHostPackages.qemu_xen";
     };
 
+    xen.driverDomain = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Run this MicroVM as a Xen driver domain: it may serve as backend for
+        devices of other domains (e.g. their network interfaces, see
+        `xen.interfaceBackends`). Sets `driver_domain = 1` and runs
+        `xl devd` in the guest, which executes the hotplug scripts there.
+      '';
+    };
+
+    xen.interfaceBackends = mkOption {
+      type = with types; attrsOf str;
+      default = { };
+      description = ''
+        Backend domain per interface id. Such an interface is served by the
+        given driver domain instead of dom0; it must be of `type = "bridge"`,
+        and the bridge lives in the driver domain.
+      '';
+      example = { "uplink" = "sys-net-vm"; };
+    };
+
     xen.extraConfig = mkOption {
       type = types.lines;
       default = "";
