@@ -39,12 +39,20 @@ rec {
     then "/dev/xvd"
     else "/dev/vd";
 
-  withDriveLetters = { volumes, storeOnDisk, ... }:
+  # Xen HVM guests also get xvda-xvdd emulated as IDE disks, which qemu-xen
+  # can't provide read-only. Their disks start behind them (xvde).
+  firstDiskIndex = { hypervisor, xen ? { }, ... }:
+    if hypervisor == "xen" && (xen.type or "pvh") == "hvm"
+    then 4
+    else 0;
+
+  withDriveLetters = { volumes, storeOnDisk, ... }@microvmConfig:
     let
       offset =
-        if storeOnDisk
-        then 1
-        else 0;
+        firstDiskIndex microvmConfig
+        + (if storeOnDisk
+           then 1
+           else 0);
     in
     map ({ fst, snd }:
       fst // {

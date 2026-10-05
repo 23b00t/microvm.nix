@@ -13,7 +13,11 @@ let
     interfaces devices vsock graphics forwardPorts credentialFiles
     kernel initrdPath storeDisk storeOnDisk;
 
+  inherit (import ../. { inherit lib; }) firstDiskIndex;
+
   xenPackage = microvmConfig.xen.package;
+  inherit (microvmConfig.xen) type;
+  isHvm = type == "hvm";
   xl = "${xenPackage}/bin/xl";
   scriptDir = "${xenPackage}/etc/xen/scripts";
 
@@ -60,9 +64,11 @@ let
     then path
     else "@STATE_DIR@/${path}";
 
+  storeDiskLetter = builtins.elemAt lib.strings.lowerChars (firstDiskIndex microvmConfig);
+
   disks =
     lib.optional storeOnDisk
-      "format=raw, vdev=xvda, access=ro, target=${storeDisk}"
+      "format=raw, vdev=xvd${storeDiskLetter}, access=ro, target=${storeDisk}"
     ++
     map ({ image, letter, readOnly, serial, direct, ... }:
       lib.warnIf (serial != null) "Volume serial is not supported for xen" (
@@ -71,14 +77,17 @@ let
       )
     ) (withDriveLetters microvmConfig);
 
+  # HVM: only the PV nic, no emulated one next to it
+  vifType = lib.optionalString isHvm "type=vif, ";
+
   vifs = map ({ type, id, mac, bridge, ... }:
     if type == "tap"
-    then "mac=${mac}, vifname=${id}, script=${vifScript}"
+    then "${vifType}mac=${mac}, vifname=${id}, script=${vifScript}"
     else if type == "bridge"
     then
       if bridge == null
       then throw "xen: interface ${id} of type bridge needs a bridge"
-      else "mac=${mac}, vifname=${id}, bridge=${bridge}"
+      else "${vifType}mac=${mac}, vifname=${id}, bridge=${bridge}"
     else throw "interface type ${type} is not supported by xen"
   ) interfaces;
 
@@ -100,10 +109,25 @@ let
     then mem + hotpluggedMem
     else mem - initialBalloonMem;
 
+  # PVH/PV load the ELF vmlinux; for HVM, qemu boots a bzImage via SeaBIOS
+  kernelImage =
+    if isHvm
+    then "${kernel}/bzImage"
+    else "${kernel.dev}/vmlinux";
+
+  # Headless HVM with the qemu device model running in dom0
+  hvmConfig = lib.optionalString isHvm ''
+    device_model_version = "qemu-xen"
+    device_model_override = ${quote "${microvmConfig.xen.qemuPackage}/bin/qemu-system-i386"}
+    vga = "none"
+    vnc = 0
+    sdl = 0
+  '';
+
   xlConfig = ''
     name = ${quote hostName}
-    type = "pvh"
-    kernel = ${quote "${kernel.dev}/vmlinux"}
+    type = ${quote type}
+    kernel = ${quote kernelImage}
     ramdisk = ${quote initrdPath}
     cmdline = ${quote "console=hvc0 panic=-1 ${toString microvmConfig.kernelParams}"}
     memory = ${toString bootMem}
@@ -114,6 +138,7 @@ let
     on_crash = "destroy"
     disk = ${xlList disks}
     vif = ${xlList vifs}
+    ${hvmConfig}
     ${microvmConfig.xen.extraConfig}
   '';
 

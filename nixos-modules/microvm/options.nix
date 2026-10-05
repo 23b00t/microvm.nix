@@ -987,6 +987,30 @@ in
       defaultText = lib.literalExpression "config.microvm.vmHostPackages.xen";
     };
 
+    xen.type = mkOption {
+      type = types.enum [ "pvh" "hvm" "pv" ];
+      default = "pvh";
+      description = ''
+        Xen guest type.
+
+        - `pvh`: default, no device model.
+        - `hvm`: needed for PCI passthrough when dom0 is PVH; runs a qemu
+          device model in dom0 (`xen.qemuPackage`).
+        - `pv`: classic paravirtualized guest.
+      '';
+    };
+
+    xen.qemuPackage = mkOption {
+      description = ''
+        qemu built for Xen, used as device model for `xen.type = "hvm"`.
+
+        Should match `virtualisation.xen.qemu.package` on the host.
+      '';
+      type = types.package;
+      default = cfg.vmHostPackages.qemu_xen;
+      defaultText = lib.literalExpression "config.microvm.vmHostPackages.qemu_xen";
+    };
+
     xen.extraConfig = mkOption {
       type = types.lines;
       default = "";
