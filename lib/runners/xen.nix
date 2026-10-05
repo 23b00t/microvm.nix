@@ -124,6 +124,14 @@ let
     sdl = 0
   '';
 
+  pciDevices = builtins.filter ({ bus, ... }: bus == "pci") devices;
+  usbDevices = builtins.filter ({ bus, ... }: bus == "usb") devices;
+
+  # Devices are made assignable (pciback) by the host's pci-setup script
+  pciConfig = lib.optionalString (pciDevices != [ ]) ''
+    pci = ${xlList (map ({ path, ... }: path) pciDevices)}
+  '';
+
   xlConfig = ''
     name = ${quote hostName}
     type = ${quote type}
@@ -139,6 +147,7 @@ let
     disk = ${xlList disks}
     vif = ${xlList vifs}
     ${hvmConfig}
+    ${pciConfig}
     ${microvmConfig.xen.extraConfig}
   '';
 
@@ -166,8 +175,12 @@ else if initialBalloonMem >= mem
 then throw "xen: microvm.initialBalloonMem must be smaller than microvm.mem"
 else if hotpluggedMem > hotplugMem
 then throw "xen: microvm.hotpluggedMem must not exceed microvm.hotplugMem"
-else if devices != [ ]
-then throw "xen does not support PCI/USB passthrough yet"
+else if usbDevices != [ ]
+then throw "xen: USB passthrough is not supported; pass the USB controller (bus = \"pci\") to a driver domain instead"
+else if pciDevices != [ ] && !isHvm
+then throw "xen: PCI passthrough needs microvm.xen.type = \"hvm\" (PVH dom0 only passes PCI devices to HVM guests)"
+else if pciDevices != [ ] && bootMem != maxMem
+then throw "xen: PCI passthrough needs the full memory at boot (no populate-on-demand); don't set initialBalloonMem or hotpluggedMem below hotplugMem"
 else if vsock.cid != null
 then throw "xen does not support vsock"
 else if graphics.enable

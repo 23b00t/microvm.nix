@@ -9,9 +9,7 @@ let
   user = "microvm";
   group = "kvm";
 
-in
-{
-  microvm.binScripts.pci-setup = lib.mkIf (pciDevices != []) (''
+  vfioPciSetup = ''
     set -eou pipefail
     ${pkgs.kmod}/bin/modprobe vfio-pci
   '' + lib.concatMapStrings ({ path, ... }: ''
@@ -33,5 +31,23 @@ in
     VFIO_DEV=$(basename $(readlink iommu_group))
     echo "Making VFIO device $VFIO_DEV accessible for user"
     chown ${user}:${group} /dev/vfio/$VFIO_DEV
-  '') pciDevices);
+  '') pciDevices;
+
+  # Xen: the device is handed to pciback instead of vfio-pci
+  xl = "${config.microvm.xen.package}/bin/xl";
+  xenPciSetup = ''
+    set -eou pipefail
+  '' + lib.concatMapStrings ({ path, ... }: ''
+    if ! ${xl} pci-assignable-list | ${pkgs.gnugrep}/bin/grep -q '${path}'; then
+      ${xl} pci-assignable-add ${path}
+    fi
+  '') pciDevices;
+
+in
+{
+  microvm.binScripts.pci-setup = lib.mkIf (pciDevices != []) (
+    if config.microvm.hypervisor == "xen"
+    then xenPciSetup
+    else vfioPciSetup
+  );
 }
