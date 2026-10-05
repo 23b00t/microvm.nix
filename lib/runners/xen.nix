@@ -85,13 +85,29 @@ let
   xlList = items:
     "[ ${lib.concatMapStringsSep ", " quote items} ]";
 
+  # Xen balloons between `memory` (boot) and `maxmem` (ceiling); growing and
+  # shrinking at runtime is done with `xl mem-set` from dom0.
+  # Same meaning as for the other hypervisors: with `balloon`, `mem` is the
+  # ceiling and `initialBalloonMem` is taken away at boot; with
+  # `hotplugMem`, the ceiling is `mem + hotplugMem` and the VM boots with
+  # `mem + hotpluggedMem`.
+  maxMem =
+    if hotplugMem != 0
+    then mem + hotplugMem
+    else mem;
+  bootMem =
+    if hotplugMem != 0
+    then mem + hotpluggedMem
+    else mem - initialBalloonMem;
+
   xlConfig = ''
     name = ${quote hostName}
     type = "pvh"
     kernel = ${quote "${kernel.dev}/vmlinux"}
     ramdisk = ${quote initrdPath}
     cmdline = ${quote "console=hvc0 panic=-1 ${toString microvmConfig.kernelParams}"}
-    memory = ${toString mem}
+    memory = ${toString bootMem}
+    maxmem = ${toString maxMem}
     vcpus = ${toString vcpu}
     on_poweroff = "destroy"
     on_reboot = "destroy"
@@ -117,8 +133,14 @@ else if user != null
 then throw "xen does not support changing the user; the MicroVM service runs as root"
 else if !storeOnDisk
 then throw "xen requires microvm.storeOnDisk (there are no virtiofs/9p shares)"
-else if balloon || initialBalloonMem != 0 || hotplugMem != 0 || hotpluggedMem != 0
-then throw "xen does not support ballooning or memory hotplug yet"
+else if balloon && hotplugMem != 0
+then throw "xen: use either microvm.balloon or microvm.hotplugMem, not both"
+else if !balloon && initialBalloonMem != 0
+then throw "xen: microvm.initialBalloonMem needs microvm.balloon"
+else if initialBalloonMem >= mem
+then throw "xen: microvm.initialBalloonMem must be smaller than microvm.mem"
+else if hotpluggedMem > hotplugMem
+then throw "xen: microvm.hotpluggedMem must not exceed microvm.hotplugMem"
 else if devices != [ ]
 then throw "xen does not support PCI/USB passthrough yet"
 else if vsock.cid != null
@@ -140,6 +162,16 @@ else {
   command = "${xl} create -F xl.cfg";
 
   canShutdown = true;
+
+  # `microvm-balloon <size-mb>`: the balloon takes SIZE away from the ceiling.
+  # Timeout because xl blocks while another xl call holds the domain lock.
+  setBalloonScript =
+    if balloon || hotplugMem != 0
+    then ''
+      ${lib.getExe' microvmConfig.vmHostPackages.coreutils "timeout"} 30 \
+        ${xl} mem-set ${lib.escapeShellArg hostName} "$(( ${toString maxMem} - SIZE ))m"
+    ''
+    else null;
 
   # Clean shutdown, with a hard destroy if the guest does not react.
   # `xl shutdown -w` returns once the guest is down, but the `xl create -F`
