@@ -141,12 +141,19 @@ else {
 
   canShutdown = true;
 
-  # Clean shutdown, with a hard destroy if the guest does not react
+  # Clean shutdown, with a hard destroy if the guest does not react.
+  # `xl shutdown -w` returns once the guest is down, but the `xl create -F`
+  # process only cleans up the domain afterwards. Wait for that before
+  # systemd kills the service, so no shut-down domain is left behind.
   shutdownCommand = ''
     if ${xl} domid ${lib.escapeShellArg hostName} >/dev/null 2>&1; then
       ${lib.getExe' microvmConfig.vmHostPackages.coreutils "timeout"} 60 \
         ${xl} shutdown -w ${lib.escapeShellArg hostName} ||
         ${xl} destroy ${lib.escapeShellArg hostName}
+      for _ in {1..20}; do
+        ${xl} domid ${lib.escapeShellArg hostName} >/dev/null 2>&1 || break
+        ${lib.getExe' microvmConfig.vmHostPackages.coreutils "sleep"} 0.5
+      done
     fi
   '';
 }
