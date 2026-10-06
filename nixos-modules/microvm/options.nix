@@ -1033,6 +1033,68 @@ in
       example = { "uplink" = "sys-net-vm"; };
     };
 
+    xen.maxvcpus = mkOption {
+      type = with types; nullOr ints.positive;
+      default = null;
+      description = ''
+        Maximum number of vCPUs (`maxvcpus`). The guest boots with
+        `microvm.vcpu` online; the rest can be brought online at runtime
+        with `xl vcpu-set`.
+      '';
+    };
+
+    xen.cpus = mkOption {
+      type = with types; nullOr str;
+      default = null;
+      description = ''
+        Host CPUs the guest's vCPUs may run on (hard pinning, `cpus`),
+        e.g. `"2-5"` or `"all,^0"`. Default: no pinning.
+      '';
+      example = "2-5";
+    };
+
+    xen.pool = mkOption {
+      type = with types; nullOr str;
+      default = null;
+      description = ''
+        CPU pool to put the guest in (`pool`). The pool must already exist
+        in dom0 (`xl cpupool-create`).
+      '';
+    };
+
+    xen.weight = mkOption {
+      type = with types; nullOr (ints.between 1 65535);
+      default = null;
+      description = ''
+        Scheduler weight (`cpu_weight`, credit/credit2). A guest with 512
+        gets twice the CPU of one with 256 (Xen's default) on a contended host.
+      '';
+    };
+
+    xen.cap = mkOption {
+      type = with types; nullOr ints.unsigned;
+      default = null;
+      description = ''
+        Maximum CPU the guest may use, in percent of one physical CPU
+        (`cap`, credit/credit2): 100 is one CPU, 0 is no cap.
+      '';
+    };
+
+    xen.onCrash = mkOption {
+      type = types.enum [ "destroy" "preserve" "coredump-destroy" ];
+      default = "destroy";
+      description = ''
+        Action when the domain crashes (`on_crash`). Restarting is left to
+        the MicroVM service, so there are no restart actions here.
+
+        - `destroy`: remove the domain.
+        - `preserve`: keep the crashed domain for inspection
+          (`xl dump-core`); it is destroyed on the next start.
+        - `coredump-destroy`: write a core dump to `/var/lib/xen/dump`,
+          then remove the domain.
+      '';
+    };
+
     xen.extraConfig = mkOption {
       type = types.lines;
       default = "";
@@ -1040,7 +1102,7 @@ in
         Extra lines appended to the generated `xl.cfg(5)` domain configuration.
       '';
       example = ''
-        cpus = "2-5"
+        on_watchdog = "destroy"
       '';
     };
 

@@ -145,6 +145,17 @@ let
     pci = ${xlList (map ({ path, ... }: path) pciDevices)}
   '';
 
+  inherit (microvmConfig.xen) maxvcpus cpus pool weight cap onCrash;
+
+  # CPU placement and scheduling, only set when configured
+  cpuConfig = lib.concatStrings (
+    lib.optional (maxvcpus != null) "maxvcpus = ${toString maxvcpus}\n"
+    ++ lib.optional (cpus != null) "cpus = ${quote cpus}\n"
+    ++ lib.optional (pool != null) "pool = ${quote pool}\n"
+    ++ lib.optional (weight != null) "cpu_weight = ${toString weight}\n"
+    ++ lib.optional (cap != null) "cap = ${toString cap}\n"
+  );
+
   xlConfig = ''
     name = ${quote hostName}
     type = ${quote type}
@@ -154,9 +165,10 @@ let
     memory = ${toString bootMem}
     maxmem = ${toString maxMem}
     vcpus = ${toString vcpu}
+    ${cpuConfig}
     on_poweroff = "destroy"
     on_reboot = "destroy"
-    on_crash = "destroy"
+    on_crash = ${quote onCrash}
     disk = ${xlList disks}
     vif = ${xlList vifs}
     ${hvmConfig}
@@ -197,6 +209,8 @@ else if pciDevices != [ ] && !isHvm
 then throw "xen: PCI passthrough needs microvm.xen.type = \"hvm\" (PVH dom0 only passes PCI devices to HVM guests)"
 else if pciDevices != [ ] && bootMem != maxMem
 then throw "xen: PCI passthrough needs the full memory at boot (no populate-on-demand); don't set initialBalloonMem or hotpluggedMem below hotplugMem"
+else if maxvcpus != null && maxvcpus < vcpu
+then throw "xen: microvm.xen.maxvcpus must not be smaller than microvm.vcpu"
 else if vsock.cid != null
 then throw "xen does not support vsock"
 else if graphics.enable
