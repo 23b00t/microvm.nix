@@ -64,6 +64,8 @@ rec {
 
   buildRunner = import ./runner.nix;
 
+  buildStoreDisk = import ./store-disk.nix;
+
   makeMacvtap = { microvmConfig, hypervisorConfig }:
     import ./macvtap.nix {
       inherit microvmConfig hypervisorConfig lib;

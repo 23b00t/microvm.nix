@@ -1,50 +1,31 @@
 { config, lib, pkgs, ... }:
 
 let
+  self-lib = import ../../lib {
+    inherit lib;
+  };
+
   regInfo = pkgs.closureInfo {
     rootPaths = [ config.system.build.toplevel ];
   };
-
-  erofs-utils =
-    # Is deduplication option specified?
-    if lib.elem "-Ededupe" config.microvm.storeDiskErofsFlags
-    then
-      # If specified, stick to the single-threaded erofs-utils
-      # to not scare anyone with warning messages. mkfs.erofs
-      # has no multi-threaded -Ededupe, so it forces
-      # single-threaded compression.
-      pkgs.buildPackages.erofs-utils
-    else
-      # Otherwise rebuild mkfs.erofs with multi-threading.
-      pkgs.buildPackages.erofs-utils.overrideAttrs (attrs: {
-        configureFlags = attrs.configureFlags ++ [
-          "--enable-multithreading"
-        ];
-      });
-
-  erofsFlags = builtins.concatStringsSep " " config.microvm.storeDiskErofsFlags;
-  squashfsFlags = builtins.concatStringsSep " " config.microvm.storeDiskSquashfsFlags;
-
-  mkfsCommand =
-    {
-      squashfs = "gensquashfs ${squashfsFlags} -D store --all-root -q $out";
-      erofs = "mkfs.erofs ${erofsFlags} -T 0 --all-root -L nix-store --mount-point=/nix/store $out store";
-    }.${config.microvm.storeDiskType};
-
-  writeClosure = pkgs.writeClosure or pkgs.writeReferencesToFile;
-
-  storeDiskContents = writeClosure (
-    [ config.system.build.toplevel ]
-    ++
-    lib.optional config.nix.enable regInfo
-  );
 
 in
 {
   options.microvm.storeDisk = with lib; mkOption {
     type = types.path;
     description = ''
-      Generated
+      The read-only /nix/store image the guest boots from.
+
+      Generated from `microvm.storeDiskContents` by default. Set it to an
+      image built with `microvm.lib.buildStoreDisk` from the contents of
+      several guests to share one image between them.
+    '';
+  };
+
+  options.microvm.storeDiskContents = with lib; mkOption {
+    type = with types; listOf package;
+    description = ''
+      Store paths whose closure goes into `microvm.storeDisk`.
     '';
   };
 
@@ -64,35 +45,18 @@ in
         config.microvm.storeDiskType
       ];
 
-      microvm.storeDisk = pkgs.buildPackages.runCommandLocal "microvm-store-disk.${config.microvm.storeDiskType}" {
-        nativeBuildInputs = [
-          pkgs.buildPackages.time
-          pkgs.buildPackages.bubblewrap
-          {
-            squashfs = pkgs.buildPackages.squashfs-tools-ng;
-            erofs = erofs-utils;
-          }.${config.microvm.storeDiskType}
-        ];
-        passthru = {
-          inherit regInfo;
-        };
-        __structuredAttrs = true;
-        unsafeDiscardReferences.out = true;
-      } ''
-        mkdir store
-        BWRAP_ARGS="--dev-bind / / --chdir $(pwd)"
-        for d in $(sort -u ${storeDiskContents}); do
-          BWRAP_ARGS="$BWRAP_ARGS --ro-bind $d $(pwd)/store/$(basename $d)"
-        done
+      microvm.storeDiskContents =
+        [ config.system.build.toplevel ]
+        ++
+        lib.optional config.nix.enable regInfo;
 
-        echo Creating a ${config.microvm.storeDiskType}
-        bwrap $BWRAP_ARGS -- time ${mkfsCommand} || \
-          (
-            echo "Bubblewrap failed. Falling back to copying...">&2
-            cp -a $(sort -u ${storeDiskContents}) store/
-            time ${mkfsCommand}
-          )
-      '';
+      microvm.storeDisk = lib.mkDefault (self-lib.buildStoreDisk {
+        inherit pkgs;
+        type = config.microvm.storeDiskType;
+        erofsFlags = config.microvm.storeDiskErofsFlags;
+        squashfsFlags = config.microvm.storeDiskSquashfsFlags;
+        contents = config.microvm.storeDiskContents;
+      });
     })
 
     (lib.mkIf (config.microvm.registerClosure && config.nix.enable) {
