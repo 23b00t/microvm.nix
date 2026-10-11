@@ -85,7 +85,7 @@
           inherit (pkgs) lib;
         in {
           build-microvm = pkgs.callPackage ./pkgs/build-microvm.nix { inherit self; };
-          inherit (pkgs) cloud-hypervisor-graphics;
+          inherit (pkgs) cloud-hypervisor-graphics xen-stubdom-linux;
           doc = pkgs.callPackage ./pkgs/doc.nix { };
           microvm = pkgs.callPackage ./pkgs/microvm-command.nix { };
           # all compilation-heavy packages that shall be prebuilt for a binary cache
@@ -143,6 +143,7 @@
 
       overlay = final: super: {
         cloud-hypervisor-graphics = import "${spectrum}/pkgs/cloud-hypervisor" { inherit final super; };
+        xen-stubdom-linux = final.callPackage ./pkgs/xen-stubdom-linux { };
       };
       overlays.default = self.overlay;
 
