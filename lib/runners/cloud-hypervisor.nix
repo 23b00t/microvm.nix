@@ -79,9 +79,8 @@ let
   // lib.optionalAttrs (!useVirtiofs && !graphics.enable) {
     mergeable = "on";
   }
-  # add ballooning options and override 'size' key
+  # add ballooning options
   // lib.optionalAttrs useHotPlugMemory {
-    size = "${toString hotplugMem}M";
     hotplug_method = "virtio-mem";
     hotplug_size = "${toString hotplugMem}M";
     hotplugged_size = "${toString hotpluggedMem}M";
@@ -233,6 +232,7 @@ in {
         lib.optional storeOnDisk (opsMapped ({
           path = toString storeDisk;
           readonly = "on";
+          image_type = "raw";
         } //
         lib.optionalAttrs storeDiskDirect {
           direct = "on";

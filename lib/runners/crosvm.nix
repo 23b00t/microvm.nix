@@ -17,9 +17,10 @@ let
   crosvmPkg = microvmConfig.crosvm.package;
 
   # Avoid pulling ${kernel.dev} and its dependencies into resulting closure
-  vmlinux = pkgs.runCommand "vmlinux" {} ''
+  # crosvm loads only the PT_LOAD segments, so the DWARF sections are dead weight.
+  vmlinux = pkgs.runCommand "vmlinux" { nativeBuildInputs = [ pkgs.binutils ]; } ''
     mkdir -p $out
-    cp ${kernel.dev}/vmlinux $out/vmlinux
+    ${pkgs.stdenv.cc.targetPrefix}strip --strip-debug -o $out/vmlinux ${kernel.dev}/vmlinux
   '';
 
   kernelPath = {
@@ -69,8 +70,8 @@ in {
         "${crosvmPkg}/bin/crosvm" "run"
         "-m" (toString mem)
         "-c" (toString vcpu)
-        "--serial" "type=stdout,console=true,stdin=true"
-        "-p" "console=ttyS0 reboot=k panic=1 ${toString microvmConfig.kernelParams}"
+        "--serial" "type=stdout,stdin=true"
+        "-p" "console=ttyS0,115200 reboot=k panic=1 ${toString microvmConfig.kernelParams}"
       ]
       ++
       (
@@ -80,7 +81,7 @@ in {
       )
       ++
       lib.optionals storeOnDisk [
-        "-r" "${storeDisk}${lib.optionalString storeDiskDirect ",o_direct=true"}"
+        "--block" "${storeDisk},o_direct=${lib.boolToString storeDiskDirect},ro=true"
       ]
       ++
       lib.optionals graphics.enable [

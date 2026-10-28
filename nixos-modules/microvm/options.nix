@@ -151,7 +151,14 @@ in
         When "deflating" or decreasing the balloon the host can give the memory
         back to the VM.
 
-        virtio-mem is recommended over ballooning if supported by the hypervisor.
+        On QEMU, cloud-hypervisor and crosvm this also enables free page
+        reporting, so the guest hands memory it isn't using back to the host
+        even if the balloon is never inflated.
+
+        virtio-mem (see `hotplugMem`) is the better way to resize guest memory
+        where the hypervisor supports it (cloud-hypervisor, and QEMU with a
+        machine type other than `microvm`), but it doesn't replace free page
+        reporting, so the two are useful together.
       '';
       default = false;
       type = types.bool;
