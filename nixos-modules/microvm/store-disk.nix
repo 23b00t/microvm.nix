@@ -60,8 +60,14 @@ in
     })
 
     (lib.mkIf (config.microvm.registerClosure && config.nix.enable) {
-      microvm.kernelParams = [
-        "regInfo=${regInfo}/registration"
+      microvm.kernelParams = let
+        # When a store disk is used, it contains regInfo as well.
+        regInfoPath = if config.microvm.storeOnDisk then
+          builtins.unsafeDiscardStringContext regInfo
+        else
+          regInfo;
+      in [
+        "regInfo=${regInfoPath}/registration"
       ];
       boot.postBootCommands = ''
         if [[ "$(cat /proc/cmdline)" =~ regInfo=([^ ]*) ]]; then
