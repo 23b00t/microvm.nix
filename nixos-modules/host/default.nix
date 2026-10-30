@@ -123,6 +123,12 @@ in
                         then microvmConfig.evaluatedConfig.config
                         else microvmConfig.config.config;
         runner = guestConfig.microvm.declaredRunner;
+        # With a store disk the host doesn't need the unpacked closure. The path
+        # still changes with the guest config, so the units below change as well.
+        toplevel = if guestConfig.microvm.storeOnDisk then
+          builtins.unsafeDiscardStringContext guestConfig.system.build.toplevel
+        else
+          guestConfig.system.build.toplevel;
       in
     {
       "install-microvm-${name}" = {
@@ -148,7 +154,7 @@ in
           # Including the toplevel here is crucial to have the service definition
           # change when the host is rebuilt and the vm definition changed.
           + lib.optionalString (!isFlake) ''
-            ln -sTf ${guestConfig.system.build.toplevel} toplevel
+            ln -sTf ${toplevel} toplevel
           ''
           # Declarative deployment requires storing just the flake
           + lib.optionalString isFlake ''
@@ -173,7 +179,7 @@ in
         # We have to make sure this service group is restarted. To make sure
         # that this service is also changed when the microvm configuration changes,
         # we also have to include a trigger here.
-        restartTriggers = [guestConfig.system.build.toplevel];
+        restartTriggers = [toplevel];
         overrideStrategy = "asDropin";
         serviceConfig.Type =
           if guestConfig.microvm.declaredRunner.supportsNotifySocket
