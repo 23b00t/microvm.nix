@@ -80,6 +80,11 @@ in
                 inherit user group;
                 mode = "0775";
               };
+              # Indirect GC root: keeps the runner of a running VM alive even
+              # if it was booted from a generation that is gone (e.g. `test`),
+              # so ExecStop (booted/bin/microvm-shutdown) still exists. Dangling
+              # while the VM is stopped, which the GC ignores.
+              "/nix/var/nix/gcroots/microvm/booted-${name}"."L+".argument = "${stateDir}/${name}/booted";
             } guestConfig.microvm.shares
           )
         )
@@ -88,6 +93,7 @@ in
             inherit user group;
             mode = "0775";
           };
+          "/nix/var/nix/gcroots/microvm".d.mode = "0755";
         }
         (builtins.attrNames config.microvm.vms);
 
