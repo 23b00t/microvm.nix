@@ -38,7 +38,7 @@ let
   xenPciSetup = ''
     set -eou pipefail
   '' + lib.concatMapStrings ({ path, ... }: ''
-    if ! ${xl} pci-assignable-list | ${pkgs.gnugrep}/bin/grep -q '${path}'; then
+    if ! ${xl} pci-assignable-list | ${pkgs.gnugrep}/bin/grep -qF '${path}'; then
       ${xl} pci-assignable-add ${path}
     fi
   '') pciDevices;
