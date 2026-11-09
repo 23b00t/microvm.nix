@@ -10,7 +10,7 @@ let
     # Is the /nix/store mounted from the host?
     builtins.any ({ source, ... }:
       source == "/nix/store"
-    ) ((import ../../lib { inherit lib; }).supportedShares config.microvm);
+    ) config.microvm.shares;
 
 in
 lib.mkIf (cfg.guest.enable && cfg.optimize.enable) {

@@ -50,13 +50,13 @@ in
         ++
         lib.optional config.nix.enable regInfo;
 
-      microvm.storeDisk = lib.mkDefault (self-lib.buildStoreDisk {
+      microvm.storeDisk = lib.mkDefault ((self-lib.buildStoreDisk {
         inherit pkgs;
         type = config.microvm.storeDiskType;
         erofsFlags = config.microvm.storeDiskErofsFlags;
         squashfsFlags = config.microvm.storeDiskSquashfsFlags;
         contents = config.microvm.storeDiskContents;
-      });
+      }).overrideAttrs (old: { passthru = old.passthru or { } // { inherit regInfo; }; }));
     })
 
     (lib.mkIf (config.microvm.registerClosure && config.nix.enable) {

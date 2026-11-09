@@ -113,6 +113,13 @@ let
   # ceiling and `initialBalloonMem` is taken away at boot; with
   # `hotplugMem`, the ceiling is `mem + hotplugMem` and the VM boots with
   # `mem + hotpluggedMem`.
+  # `balloon`: memory < maxmem in xl.cfg, i.e. populate-on-demand. The guest
+  # sees the full ceiling and has to hand the difference back before init
+  # ("Initial ballooning down"), page by page: ~1 s per GB.
+  # `hotplugMem`: memory = maxmem = boot size, no populate-on-demand. The
+  # grower raises the ceiling (`xl mem-max`) once the guest is up: Linux
+  # xen-balloon takes `static-max - target` at its first target event as a
+  # permanent offset (`watch_target`).
   maxMem =
     if hotplugMem != 0
     then mem + hotplugMem
@@ -145,7 +152,7 @@ let
     pci = ${xlList (map ({ path, ... }: path) pciDevices)}
   '';
 
-  inherit (microvmConfig.xen) maxvcpus cpus pool weight cap onCrash;
+  inherit (microvmConfig.xen) maxvcpus cpus pool weight cap;
 
   # CPU placement and scheduling, only set when configured
   cpuConfig = lib.concatStrings (
@@ -163,12 +170,11 @@ let
     ramdisk = ${quote initrdPath}
     cmdline = ${quote "console=hvc0 panic=-1 ${toString microvmConfig.kernelParams}"}
     memory = ${toString bootMem}
-    maxmem = ${toString maxMem}
+    maxmem = ${toString (if hotplugMem != 0 then bootMem else maxMem)}
     vcpus = ${toString vcpu}
     ${cpuConfig}
     on_poweroff = "destroy"
     on_reboot = "destroy"
-    on_crash = ${quote onCrash}
     disk = ${xlList disks}
     vif = ${xlList vifs}
     ${hvmConfig}
@@ -191,8 +197,8 @@ if !pkgs.stdenv.hostPlatform.isx86_64
 then throw "xen is only supported on x86_64-linux"
 else if user != null
 then throw "xen does not support changing the user; the MicroVM service runs as root"
-else if !storeOnDisk
-then throw "xen requires microvm.storeOnDisk (there are no virtiofs/9p shares)"
+else if !storeOnDisk || microvmConfig.shares != [ ]
+then throw "xen has no virtiofs/9p shares: set no microvm.shares, /nix/store comes from microvm.storeOnDisk"
 else if balloon && hotplugMem != 0
 then throw "xen: use either microvm.balloon or microvm.hotplugMem, not both"
 else if !balloon && initialBalloonMem != 0
@@ -208,7 +214,7 @@ then throw "xen: USB passthrough is not supported; pass the USB controller (bus 
 else if pciDevices != [ ] && !isHvm
 then throw "xen: PCI passthrough needs microvm.xen.type = \"hvm\" (PVH dom0 only passes PCI devices to HVM guests)"
 else if pciDevices != [ ] && bootMem != maxMem
-then throw "xen: PCI passthrough needs the full memory at boot (no populate-on-demand); don't set initialBalloonMem or hotpluggedMem below hotplugMem"
+then throw "xen: PCI passthrough needs the full memory at boot: no populate-on-demand (initialBalloonMem), and memory hotplug with PCI devices is not supported (hotpluggedMem below hotplugMem)"
 else if maxvcpus != null && maxvcpus < vcpu
 then throw "xen: microvm.xen.maxvcpus must not be smaller than microvm.vcpu"
 else if vsock.cid != null
@@ -248,7 +254,7 @@ else {
   shutdownCommand = ''
     if ${xl} domid ${lib.escapeShellArg hostName} >/dev/null 2>&1; then
       ${lib.getExe' microvmConfig.vmHostPackages.coreutils "timeout"} 60 \
-        ${xl} shutdown -w ${lib.escapeShellArg hostName} ||
+        ${xl} shutdown -w ${lib.optionalString isHvm "-F "}${lib.escapeShellArg hostName} ||
         ${xl} destroy ${lib.escapeShellArg hostName}
       for _ in {1..20}; do
         ${xl} domid ${lib.escapeShellArg hostName} >/dev/null 2>&1 || break

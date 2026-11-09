@@ -610,8 +610,8 @@ in
       type = types.bool;
       default = ! lib.any ({ source, ... }:
         source == "/nix/store"
-      ) (self-lib.supportedShares config.microvm);
-      description = "Whether to boot with the storeDisk, that is, unless the host's /nix/store is a microvm.share (Xen always uses the storeDisk).";
+      ) config.microvm.shares;
+      description = "Whether to boot with the storeDisk, that is, unless the host's /nix/store is a microvm.share.";
     };
 
     registerClosure = lib.mkEnableOption ''
@@ -1037,8 +1037,8 @@ in
       description = ''
         Run this MicroVM as a Xen driver domain: it may serve as backend for
         devices of other domains (e.g. their network interfaces, see
-        `xen.interfaceBackends`). Sets `driver_domain = 1` and runs
-        `xl devd` in the guest, which executes the hotplug scripts there.
+        `xen.interfaceBackends`). Sets `driver_domain = 1`; the guest has to
+        run `xl devd`, which executes the hotplug scripts there.
       '';
     };
 
@@ -1097,21 +1097,6 @@ in
       description = ''
         Maximum CPU the guest may use, in percent of one physical CPU
         (`cap`, credit/credit2): 100 is one CPU, 0 is no cap.
-      '';
-    };
-
-    xen.onCrash = mkOption {
-      type = types.enum [ "destroy" "preserve" "coredump-destroy" ];
-      default = "destroy";
-      description = ''
-        Action when the domain crashes (`on_crash`). Restarting is left to
-        the MicroVM service, so there are no restart actions here.
-
-        - `destroy`: remove the domain.
-        - `preserve`: keep the crashed domain for inspection
-          (`xl dump-core`); it is destroyed on the next start.
-        - `coredump-destroy`: write a core dump to `/var/lib/xen/dump`,
-          then remove the domain.
       '';
     };
 

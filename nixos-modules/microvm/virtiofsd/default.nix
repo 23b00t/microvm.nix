@@ -5,7 +5,7 @@ let
     proto == "virtiofs" &&
     # DAX shares on crosvm are served by crosvm's built-in device
     !(dax && config.microvm.hypervisor == "crosvm")
-  ) ((import ../../../lib { inherit lib; }).supportedShares config.microvm);
+  ) config.microvm.shares;
 
   requiresVirtiofsd = virtiofsShares != [] && config.microvm.hypervisor != "vfkit";
 

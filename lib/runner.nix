@@ -8,7 +8,7 @@ let
 
   inherit (microvmConfig) hostName vmHostPackages;
 
-  inherit (import ./. { inherit lib; }) makeMacvtap withDriveLetters extractOptValues extractParamValue supportedShares;
+  inherit (import ./. { inherit lib; }) makeMacvtap withDriveLetters extractOptValues extractParamValue;
   inherit (import ./volumes.nix { pkgs = microvmConfig.vmHostPackages; }) createVolumesScript;
   inherit (makeMacvtap {
     inherit microvmConfig hypervisorConfig;
@@ -264,7 +264,7 @@ vmHostPackages.buildPackages.runCommandLocal "microvm-${microvmConfig.hypervisor
         echo "${socket}" > $out/share/microvm/virtiofs/${tag}/socket
         echo "${source}" > $out/share/microvm/virtiofs/${tag}/source
       ''
-    ) (supportedShares microvmConfig)}
+    ) microvmConfig.shares}
 
   ${lib.concatMapStrings ({ bus, path, ... }: ''
     echo "${path}" >> $out/share/microvm/${bus}-devices
