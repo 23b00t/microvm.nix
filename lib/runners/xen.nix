@@ -239,9 +239,17 @@ else {
 
   # `microvm-balloon <size-mb>`: the balloon takes SIZE away from the ceiling.
   # Timeout because xl blocks while another xl call holds the domain lock.
+  # With hotplugMem the domain starts with maxmem = boot size, so the ceiling
+  # is raised first (idempotent). The race with the guest's first target
+  # event (see maxMem) only hits a raise before the guest is up; a manual
+  # call comes long after that.
   setBalloonScript =
     if balloon || hotplugMem != 0
     then ''
+      ${lib.optionalString (hotplugMem != 0) ''
+        ${lib.getExe' microvmConfig.vmHostPackages.coreutils "timeout"} 30 \
+          ${xl} mem-max ${lib.escapeShellArg hostName} ${toString maxMem}m
+      ''}
       ${lib.getExe' microvmConfig.vmHostPackages.coreutils "timeout"} 30 \
         ${xl} mem-set ${lib.escapeShellArg hostName} "$(( ${toString maxMem} - SIZE ))m"
     ''
