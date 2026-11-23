@@ -194,13 +194,14 @@ in
         # Register with systemd-machined if the VM opts in
         wants = lib.optionals runner.registerWithMachined [
           "systemd-machined.service"
-        ];
+        ] ++ lib.optionals (runner.hypervisor == "xen") xenServices;
         after = lib.optionals runner.registerWithMachined [
           "systemd-machined.service"
         ] ++ lib.optionals (runner.hypervisor == "xen") xenServices;
         # Start after and stop before the Xen toolstack daemons, so that
-        # guests are shut down cleanly on host shutdown
-        requires = lib.optionals (runner.hypervisor == "xen") xenServices;
+        # guests are shut down cleanly on host shutdown. Wants (above), not
+        # Requires: a switch that restarts xenconsoled (new Xen build) must
+        # not stop every running guest with it
       };
       "microvm-tap-interfaces@${name}" = {
         serviceConfig.X-RestartIfChanged = [ "" microvmConfig.restartIfChanged ];
